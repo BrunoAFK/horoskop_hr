@@ -1,13 +1,12 @@
 {
   "domain": "horoskop_hr",
   "name": "Horoskop HR",
-  "codeowners": [
-    "@bruno_afk"
-  ],
+  "codeowners": ["@BrunoAFK"],
   "config_flow": true,
-  "documentation": "https://ehoroskop.net/",
+  "documentation": "https://github.com/BrunoAFK/horoskop_hr",
   "integration_type": "service",
   "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/BrunoAFK/horoskop_hr/issues",
   "requirements": [],
   "version": "1.0.0"
 }

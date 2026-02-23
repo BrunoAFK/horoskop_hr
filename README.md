@@ -2,46 +2,50 @@
 
 [![HACS Custom](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 
-`horoskop_hr` dohvaća horoskop sadržaj sa `ehoroskop.net` i izlaže ga kroz senzore u Home Assistantu.
+`horoskop_hr` fetches horoscope content from `ehoroskop.net` and exposes it as Home Assistant sensors.
 
-## Što integracija radi
-- Dohvaća horoskop za svih 12 znakova:
-  - dnevni
-  - tjedni
-  - mjesečni
-- Generira više tipova payload senzora (`raw`, `formatted`, `translated`)
-- Ima ručne servise za refresh i prijevod
-- Podržava automatski prijevod preko `ai_task` servisa
+## What this integration does
+- Fetches horoscope content for all 12 zodiac signs:
+  - daily
+  - weekly
+  - monthly
+- Provides structured payload sensors (`raw`, `formatted`, `translated`)
+- Supports manual refresh and manual translation services
+- Supports optional AI translation via `ai_task`
 
-## Instalacija
-### HACS (preporučeno)
-1. Otvori HACS.
-2. Idi na `Integrations`.
-3. `Custom repositories` -> dodaj ovaj repo kao `Integration`.
-4. Instaliraj `Horoskop HR`.
-5. Restartaj Home Assistant.
+## Quick start
+1. Install via HACS (Custom Repository) or copy manually to `custom_components/horoskop_hr`.
+2. Restart Home Assistant.
+3. Add integration: `Settings -> Devices & Services -> Add Integration -> Horoskop HR`.
+4. Open `Configure` and set options.
+
+## Installation
+### HACS (recommended)
+1. Open HACS.
+2. Go to `Integrations`.
+3. Open `Custom repositories`.
+4. Add this repository as category `Integration`.
+5. Install `Horoskop HR`.
+6. Restart Home Assistant.
 
 ### Manual
-1. Kopiraj `custom_components/horoskop_hr` u HA `custom_components` direktorij.
-2. Restartaj Home Assistant.
+1. Copy `custom_components/horoskop_hr` into your HA `custom_components` directory.
+2. Restart Home Assistant.
 
-## Konfiguracija
-1. `Settings` -> `Devices & Services` -> `Add Integration`.
-2. Odaberi `Horoskop HR`.
-3. Nakon inicijalnog setupa opcije se podešavaju kroz `Configure`:
-   - `update_interval` (sekunde, 300-86400)
-   - `use_scheduled_refresh` (true/false)
-   - `scheduled_times` (npr. `00:00,08:00`)
-   - `translation_enabled`
-   - `translation_language`
-   - `translation_ai_task_entity` (opcionalno)
+## Configuration
+After adding the integration, use `Configure` to set:
+- `update_interval` (seconds, 300-86400)
+- `use_scheduled_refresh` (true/false)
+- `scheduled_times` (for example: `00:00,08:00`)
+- `translation_enabled`
+- `translation_language`
+- `translation_ai_task_entity` (optional)
 
-Napomena:
-- Integracija je `single instance` (jedna instanca po HA sustavu).
+Note:
+- The integration is single-instance.
 
-## Entiteti
-Kreira sljedeće senzore:
-
+## Entities
+Created sensors:
 - `sensor.horoskop_dnevni_raw`
 - `sensor.horoskop_tjedni_raw`
 - `sensor.horoskop_mjesecni_raw`
@@ -53,59 +57,45 @@ Kreira sljedeće senzore:
 - `sensor.horoskop_mjesecni_translated`
 - `sensor.horoskop_translation_status`
 
-## Struktura podataka
-Svi payload senzori imaju:
-- kratko stanje (`state`) kao timestamp generiranja
-- puni sadržaj u atributu `data`
-- izvore u atributu `source_urls`
+## Data model
+Payload sensors use:
+- `state`: short generated timestamp
+- `attributes.data`: full payload
+- `attributes.source_urls`: source links
 
-To je namjerno zbog HA limita duljine `state` vrijednosti.
+This avoids Home Assistant state length limits.
 
-### `*_raw`
-- `dnevni_raw`: `{ znak, url, datum, tekst }`
-- `tjedni_raw`: `{ znak, url, datum_od_do, kategorija }`
-  - `kategorija`: `ljubav|posao|zdravlje` -> `{ score, tekst }`
-- `mjesecni_raw`: `{ znak, url, mjesec, tekst }`
-
-### `*_formatted`
-- isti ključevi znakova (`ovan`, `bik`, ...)
-- vrijednost je čitljiv, formatiran tekst po znaku
-
-### `*_translated`
-- isti ključevi znakova
-- preveden sadržaj formatiranog teksta
-- puni se kad prijevod uspije
-
-## Servisi
+## Services
 - `horoskop_hr.refresh`
-  - odmah pokreće dohvat podataka
+  - trigger immediate fetch
 - `horoskop_hr.translate`
-  - ručno pokreće prijevod trenutnih payloada
+  - trigger translation for current payloads
 
-Opcionalno za oba servisa:
+Optional field:
 - `entry_id`
 
-## Translation status
-`sensor.horoskop_translation_status` prikazuje stanje prijevoda i atribute:
+## Translation status sensor
+`sensor.horoskop_translation_status` includes:
 - `last_attempt`
 - `last_success`
 - `error_message`
 - `language`
 
-## Ograničenja
-- Izvor je HTML scrape: ako se layout izvora značajno promijeni, parser treba prilagodbu.
-- Sadržaj i dostupnost ovise o vanjskom izvoru (`ehoroskop.net`).
+## Troubleshooting
+- If sensors are empty, run `horoskop_hr.refresh` once manually.
+- If translation fails, verify `ai_task` service availability.
+- If source layout changes significantly, parser updates may be required.
 
-## HACS update flow
-HACS prikazuje update kada postoji novi release/tag i veći `manifest.json` `version`.
+## HACS updates
+HACS shows updates when a newer release/tag is published and `manifest.json` version is higher.
 
-Preporučeni flow:
-1. Povećaj `custom_components/horoskop_hr/manifest.json` -> `version`.
-2. Merge/push na `main`.
-3. Objavi release/tag `vX.Y.Z`.
+Recommended release flow:
+1. Bump `custom_components/horoskop_hr/manifest.json` version.
+2. Push to `main`.
+3. Publish release/tag `vX.Y.Z`.
 
-## Podrška
-Bugove i feature requestove prijavi kroz GitHub Issues.
+## Support
+Please use GitHub Issues for bugs and feature requests.
 
 ## Disclaimer
 
