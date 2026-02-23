@@ -1,0 +1,13 @@
+{
+  "domain": "horoskop_hr",
+  "name": "Horoskop HR",
+  "codeowners": [
+    "@bruno_afk"
+  ],
+  "config_flow": true,
+  "documentation": "https://ehoroskop.net/",
+  "integration_type": "service",
+  "iot_class": "cloud_polling",
+  "requirements": [],
+  "version": "1.0.0"
+}

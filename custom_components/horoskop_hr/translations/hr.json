@@ -1,0 +1,26 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Horoskop HR",
+        "description": "Dodaj Horoskop HR integraciju."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Dozvoljena je samo jedna Horoskop HR instanca."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Horoskop HR opcije",
+        "data": {
+          "update_interval": "Interval ažuriranja (sekunde)",
+          "translation_enabled": "Uključi prijevod",
+          "translation_language": "Ciljni jezik prijevoda",
+          "translation_ai_task_entity": "AI Task entitet (opcionalno)"
+        }
+      }
+    }
+  }
+}

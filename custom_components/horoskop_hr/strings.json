@@ -1,0 +1,28 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Horoskop HR",
+        "description": "Add Horoskop HR integration."
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Only one Horoskop HR instance is allowed."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Horoskop HR options",
+        "data": {
+          "update_interval": "Update interval (seconds)",
+          "use_scheduled_refresh": "Use scheduled refresh",
+          "scheduled_times": "Scheduled times (HH:MM, comma-separated)",
+          "translation_enabled": "Enable translation",
+          "translation_language": "Target translation language",
+          "translation_ai_task_entity": "AI Task entity (optional)"
+        }
+      }
+    }
+  }
+}
