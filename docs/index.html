@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Horoskop HR — Home Assistant Integration</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,400;0,600;0,700;0,900;1,400;1,600&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+<!-- Init: theme + lang before paint -->
+<script>
+(function(){
+  var tc=document.cookie.match(/theme=(dark|light)/);
+  var isDark=tc?tc[1]==='dark':window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if(isDark)document.documentElement.classList.add('dark');
+  var lc=document.cookie.match(/lang=(hr|en)/);
+  var lang;
+  if(lc){lang=lc[1];}
+  else{var bl=(navigator.language||'en').toLowerCase();lang=bl.startsWith('hr')||bl.startsWith('sr')||bl.startsWith('bs')?'hr':'en';}
+  document.documentElement.setAttribute('data-lang',lang);
+  document.documentElement.lang=lang;
+  window.__lang=lang;
+})();
+</script>
+
+<script>
+tailwind.config={
+  darkMode:'class',
+  theme:{extend:{
+    fontFamily:{
+      display:['Fraunces','serif'],
+      body:['Inter','sans-serif'],
+      mono:['JetBrains Mono','monospace'],
+    },
+    animation:{'pulse-slow':'pulse 4s ease-in-out infinite','spin-slow':'spin 30s linear infinite'},
+  }}
+}
+</script>
+
+<style>
+  :root{
+    --accent:#a855f7;
+    --accent2:#7c3aed;
+    --accent3:#c084fc;
+    --glow:rgba(168,85,247,.15);
+  }
+  html.dark{
+    --accent:#c084fc;
+    --accent2:#a855f7;
+    --accent3:#e879f9;
+    --glow:rgba(192,132,252,.1);
+  }
+
+  body{font-family:'Inter',sans-serif;font-size:17px;line-height:1.65;overflow-x:hidden;}
+
+  /* ── Starfield background ── */
+  .starfield{position:absolute;inset:0;overflow:hidden;pointer-events:none;}
+  .star{
+    position:absolute;border-radius:50%;
+    background:white;
+    animation:twinkle var(--dur,3s) ease-in-out infinite var(--delay,0s);
+  }
+  @keyframes twinkle{
+    0%,100%{opacity:var(--min-op,.1);transform:scale(1);}
+    50%{opacity:var(--max-op,.7);transform:scale(1.3);}
+  }
+
+  /* ── Nebula glow orbs ── */
+  .nebula{
+    position:absolute;border-radius:50%;
+    filter:blur(80px);
+    animation:nebulaPulse 8s ease-in-out infinite;
+  }
+  @keyframes nebulaPulse{
+    0%,100%{opacity:.4;transform:scale(1);}
+    50%{opacity:.7;transform:scale(1.1);}
+  }
+
+  /* ── Zodiac wheel spin ── */
+  @keyframes zodiacFloat{
+    0%,100%{transform:translateY(0) rotate(0deg);}
+    50%{transform:translateY(-8px) rotate(3deg);}
+  }
+  .zodiac-float{animation:zodiacFloat 5s ease-in-out infinite;}
+
+  /* ── Scroll reveal ── */
+  .reveal{opacity:0;transform:translateY(24px);transition:opacity .65s ease,transform .65s ease;}
+  .reveal.visible{opacity:1;transform:translateY(0);}
+
+  /* ── Code blocks ── */
+  .cb{background:rgba(168,85,247,.05);border:1px solid rgba(168,85,247,.2);border-radius:10px;}
+  html.dark .cb{background:rgba(192,132,252,.06);border-color:rgba(192,132,252,.22);}
+
+  /* ── Grad text ── */
+  .grad{background:linear-gradient(135deg,#a855f7,#c084fc,#e879f9,#f0abfc);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .grad2{background:linear-gradient(135deg,#7c3aed,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+
+  /* ── Cards ── */
+  .card{transition:all .25s ease;border:1px solid transparent;border-radius:1.25rem;}
+  .card:hover{border-color:rgba(168,85,247,.35);transform:translateY(-3px);}
+
+  /* ── Sensor badges ── */
+  .sensor-badge{transition:all .2s ease;cursor:default;border-radius:12px;}
+  .sensor-badge:hover{transform:translateY(-2px);box-shadow:0 4px 24px rgba(168,85,247,.25);}
+
+  /* ── Timeline ── */
+  .tl-line{position:absolute;left:19px;top:44px;bottom:8px;width:2px;background:linear-gradient(to bottom,rgba(168,85,247,.5),transparent);}
+
+  /* ── Dot loader ── */
+  .dot{display:inline-block;}
+  .dot:nth-child(1){animation:dotB 1.4s ease-in-out infinite;}
+  .dot:nth-child(2){animation:dotB 1.4s ease-in-out .2s infinite;}
+  .dot:nth-child(3){animation:dotB 1.4s ease-in-out .4s infinite;}
+  @keyframes dotB{0%,80%,100%{transform:scale(.6);opacity:.4;}40%{transform:scale(1);opacity:1;}}
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar{width:5px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:rgba(168,85,247,.4);border-radius:3px;}
+
+  /* ── Theme pill ── */
+  .theme-pill{display:flex;align-items:center;gap:8px;background:transparent;border:1px solid rgba(168,85,247,.3);border-radius:999px;padding:5px 12px 5px 10px;cursor:pointer;transition:border-color .2s,background .2s;}
+  .theme-pill:hover{border-color:rgba(168,85,247,.7);background:rgba(168,85,247,.05);}
+  .tptrack{position:relative;width:32px;height:18px;border-radius:9px;background:#94a3b8;transition:background .3s;flex-shrink:0;}
+  html.dark .tptrack{background:#a855f7;}
+  .tpthumb{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;background:white;transition:transform .3s;}
+  html.dark .tpthumb{transform:translateX(14px);}
+  .tplabel{font-family:'JetBrains Mono',monospace;font-size:11px;color:#a855f7;letter-spacing:.05em;min-width:32px;}
+
+  /* ── Lang toggle ── */
+  .lang-toggle{display:flex;align-items:center;border:1px solid rgba(168,85,247,.3);border-radius:999px;overflow:hidden;cursor:pointer;transition:border-color .2s;}
+  .lang-toggle:hover{border-color:rgba(168,85,247,.7);}
+  .lang-btn{padding:5px 12px;font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.05em;cursor:pointer;transition:all .2s;color:#94a3b8;background:transparent;border:none;outline:none;}
+  .lang-btn.active{color:white;background:#a855f7;border-radius:999px;}
+  .lang-btn:not(.active):hover{color:#a855f7;}
+
+  /* ── Lang switch fade ── */
+  .lang-switching [data-t]{opacity:0!important;transition:opacity .15s ease;}
+  [data-t]{transition:opacity .15s ease;}
+
+  /* ── Step num ── */
+  .sn{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:500;letter-spacing:.1em;}
+
+  @keyframes fadeUp{from{opacity:0;transform:translateY(20px);}to{opacity:1;transform:translateY(0);}}
+
+  /* ── Section divider ── */
+  .divider{height:1px;background:linear-gradient(90deg,transparent,rgba(168,85,247,.2),transparent);}
+
+  /* ── AI badge glow ── */
+  .ai-glow{
+    box-shadow:0 0 20px rgba(168,85,247,.3), 0 0 60px rgba(168,85,247,.1);
+    animation:aiGlow 3s ease-in-out infinite;
+  }
+  @keyframes aiGlow{
+    0%,100%{box-shadow:0 0 20px rgba(168,85,247,.3),0 0 60px rgba(168,85,247,.1);}
+    50%{box-shadow:0 0 30px rgba(168,85,247,.5),0 0 80px rgba(168,85,247,.2);}
+  }
+
+  /* ── Zodiac sign grid ── */
+  .zodiac-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.75rem;}
+  @media(min-width:640px){.zodiac-grid{grid-template-columns:repeat(6,1fr);}}
+  @media(min-width:1024px){.zodiac-grid{grid-template-columns:repeat(12,1fr);}}
+
+  /* ── Light mode overrides (this page is dark-first) ── */
+  html:not(.dark) body{
+    background:#f4f2ff !important;
+    color:#1e293b !important;
+  }
+  html:not(.dark) [class*="bg-[#0a0612]"]{background-color:#f4f2ff !important;}
+  html:not(.dark) [class*="bg-[#0d0920]"]{background-color:#ebe7ff !important;}
+  html:not(.dark) [class*="bg-white/[0.03]"]{background:rgba(255,255,255,.94) !important;}
+  html:not(.dark) [class*="bg-white/[0.02]"]{background:rgba(255,255,255,.9) !important;}
+  html:not(.dark) [class*="bg-white/5"]{background:rgba(255,255,255,.86) !important;}
+  html:not(.dark) [class*="border-white/5"],
+  html:not(.dark) [class*="border-white/8"],
+  html:not(.dark) [class*="border-white/10"]{border-color:rgba(100,116,139,.45) !important;}
+  html:not(.dark) .text-white{color:#0f172a !important;}
+  html:not(.dark) .text-slate-400{color:#334155 !important;}
+  html:not(.dark) .text-slate-500{color:#475569 !important;}
+  html:not(.dark) .text-slate-600{color:#64748b !important;}
+  html:not(.dark) .text-slate-200{color:#0f172a !important;}
+  html:not(.dark) .text-purple-300{color:#6d28d9 !important;}
+  html:not(.dark) .text-purple-400{color:#7c3aed !important;}
+  html:not(.dark) .text-fuchsia-300{color:#a21caf !important;}
+  html:not(.dark) .star{background:#7c3aed;}
+  html:not(.dark) .nebula{opacity:.25;}
+</style>
+</head>
+
+<body class="bg-[#0a0612] dark:bg-[#0a0612] text-slate-300 transition-colors duration-300">
+
+<!-- ═══════════════ TRANSLATIONS ═══════════════ -->
+<script>
+const T={
+  hr:{
+    theme_dark:"Tamno", theme_light:"Svijetlo",
+    nav_github:"GitHub",
+
+    hero_sub:"Home Assistant integracija koja dohvaća dnevne, tjedne i mjesečne horoskope za svih 12 znakova zodijaka s ehoroskop.net — s opcionalnim AI prijevodom.",
+    badge_hacs:"HACS kompatibilno", badge_ha:"Home Assistant", badge_ai:"AI prijevod", badge_os:"Open Source",
+    scroll:"Skrolaj",
+
+    s01_label:"O projektu", s01_title:"Što je Horoskop HR?",
+    c1_title:"Svi znakovi zodijaka", c1_body:"Integracija dohvaća horoskopski sadržaj za svih 12 znakova — dnevno, tjedno i mjesečno. Svaki znak dobiva vlastite senzore s punim podacima.",
+    c2_title:"AI prijevod", c2_body:"Opcionalni AI prijevod putem HA ai_task servisa. Sadržaj se prevodi na odabrani jezik i sprema kao poseban senzor uz originalni.",
+    c3_title:"Strukturirani senzori", c3_body:"Svaki tip horoskopa (raw, formatted, translated) dolazi kao zasebni sensor entitet s payload-om u atributima — zaobilazeći HA limit duljine stanja.",
+    c4_title:"Fleksibilno osvježavanje", c4_body:"Podesivi interval osvježavanja i podrška za zakazana osvježavanja u točno određenim vremenima dana (npr. u ponoć i 8 ujutro).",
+
+    s02_label:"Instalacija", s02_title:"HACS Custom Repository", s02_sub:"Preporučeni način instalacije — kroz HACS kao custom repozitorij.",
+    step1_title:"Otvori HACS", step1_body:"U Home Assistantu idi na",
+    step2_title:"Custom repozitoriji", step2_body:"Klikni na",
+    step3_title:"Dodaj repozitorij", step3_body:"URL repozitorija i kategorija",
+    step4_title:"Instaliraj", step4_body:"Pronađi", step4_body2:"u HACS i klikni Install",
+    step5_title:"Restart & Konfiguracija", step5_body:"Restartaj HA → idi na", step5_body2:"→ Horoskop HR",
+    manual_label:"Ručna instalacija", manual_1:"Kopiraj mapu", manual_1b:"u HA config direktorij",
+    manual_2:"Restartaj Home Assistant", manual_3:"Dodaj integraciju kroz Settings",
+    target_path:"Target path", domain_label:"Integration domain", entity_prefix:"Tip integracije",
+
+    s03_label:"Konfiguracija", s03_title:"Postavljanje integracije",
+    cfg_p1:"Nakon instalacije i restarta, integracija se dodaje kroz standardni HA UI. Integracija je single-instance — može se dodati samo jednom.",
+    cfg_p2:"U opcijama (Configure) podešavaš interval osvježavanja, zakazana vremena, te sve postavke AI prijevoda.",
+    cfg_p3:"AI prijevod je potpuno opcionalan — integracija radi i bez njega, prikazujući originalni hrvatski sadržaj.",
+    cfg_interval:"Interval (sekunde)", cfg_schedule:"Zakazana vremena", cfg_translation:"AI prijevod", cfg_lang:"Jezik prijevoda",
+    cfg_note:"Napomena", cfg_note_body:"Integracija je single-instance. Može se dodati samo jednom u HA.",
+    author_label:"Autor", tech_label:"Tehnologije", source_label:"Izvor podataka",
+
+    s04_label:"Senzori", s04_title:"Entiteti i senzori", s04_sub:"Senzori kreirani automatski za svaki tip horoskopa.",
+    raw_label:"Raw senzori — originalni HTML/tekst",
+    fmt_label:"Formatted senzori — čišćeni tekst",
+    trans_label:"Translated senzori — AI prijevod",
+    status_label:"Status senzor",
+    status_body:"Prati stanje AI prijevoda — zadnji pokušaj, zadnji uspjeh, poruka greške i jezik.",
+    data_model_label:"Data model",
+    data_model_body:"Payload senzori koriste state za kratki timestamp, a puni sadržaj ide u attributes.data. Source linkovi su u attributes.source_urls.",
+
+    s05_label:"Servisi", s05_title:"HA servisi",
+    svc1_title:"horoskop_hr.refresh", svc1_body:"Odmah pokreće dohvat novih podataka bez čekanja na sljedeći interval.",
+    svc2_title:"horoskop_hr.translate", svc2_body:"Pokreće AI prijevod za trenutne payload-e. Opcijski prima entry_id parametar.",
+
+    s06_label:"Značajke", s06_title:"Ključne značajke",
+    f1_title:"12 znakova zodijaka", f1_body:"Potpuna podrška za sve znakove — Ovan, Bik, Blizanci, Rak, Lav, Djevica, Vaga, Škorpion, Strijelac, Jarac, Vodenjak, Ribe.",
+    f2_title:"3 tipa horoskopa", f2_body:"Dnevni, tjedni i mjesečni horoskop — svaki kao zasebni senzor.",
+    f3_title:"AI prijevod", f3_body:"Opcionalni AI prijevod putem HA ai_task entiteta na bilo koji jezik.",
+    f4_title:"Zakazano osvježavanje", f4_body:"Osvježavanje u točno definiranim vremenima dana, ne samo po intervalu.",
+    f5_title:"HACS update flow", f5_body:"Standardni HACS flow — release tag i nova verzija u manifest.json.",
+    f6_title:"Bez pohrane sadržaja", f6_body:"Integracija ne cachira niti redistribuira sadržaj — direktni fetch s izvora.",
+
+    s07_label:"Dokumentacija", s07_title:"Resursi i podrška",
+    d1_title:"GitHub repozitorij", d2_title:"Prijavi bug", d3_title:"ehoroskop.net", d4_title:"Releases",
+    cta:"Pogledaj na GitHubu",
+    footer_sub:"Home Assistant Integration", footer_hacs:"HACS Custom Integration", footer_os:"Open Source",
+    footer_unofficial:"Neslužbeni projekt — nije povezan s ehoroskop.net",
+  },
+  en:{
+    theme_dark:"Dark", theme_light:"Light",
+    nav_github:"GitHub",
+
+    hero_sub:"A Home Assistant integration that fetches daily, weekly and monthly horoscopes for all 12 zodiac signs from ehoroskop.net — with optional AI translation.",
+    badge_hacs:"HACS Compatible", badge_ha:"Home Assistant", badge_ai:"AI Translation", badge_os:"Open Source",
+    scroll:"Scroll",
+
+    s01_label:"About", s01_title:"What is Horoskop HR?",
+    c1_title:"All zodiac signs", c1_body:"The integration fetches horoscope content for all 12 signs — daily, weekly and monthly. Each sign gets its own sensors with full data.",
+    c2_title:"AI Translation", c2_body:"Optional AI translation via the HA ai_task service. Content is translated to the chosen language and stored as a separate sensor alongside the original.",
+    c3_title:"Structured sensors", c3_body:"Each horoscope type (raw, formatted, translated) comes as a separate sensor entity with the payload in attributes — bypassing HA's state length limit.",
+    c4_title:"Flexible refresh", c4_body:"Adjustable refresh interval and support for scheduled refreshes at specific times of day (e.g. midnight and 8am).",
+
+    s02_label:"Installation", s02_title:"HACS Custom Repository", s02_sub:"The recommended installation method — via HACS as a custom repository.",
+    step1_title:"Open HACS", step1_body:"In Home Assistant navigate to",
+    step2_title:"Custom Repositories", step2_body:"Click",
+    step3_title:"Add Repository", step3_body:"Enter the repository URL and set category to",
+    step4_title:"Install", step4_body:"Find", step4_body2:"in HACS and click Install",
+    step5_title:"Restart & Configure", step5_body:"Restart HA → navigate to", step5_body2:"→ Horoskop HR",
+    manual_label:"Manual Installation", manual_1:"Copy the folder", manual_1b:"to your HA config directory",
+    manual_2:"Restart Home Assistant", manual_3:"Add integration via Settings",
+    target_path:"Target path", domain_label:"Integration domain", entity_prefix:"Integration type",
+
+    s03_label:"Configuration", s03_title:"Setting up the integration",
+    cfg_p1:"After installation and restart, the integration is added through the standard HA UI. The integration is single-instance — it can only be added once.",
+    cfg_p2:"In the options (Configure) you set the refresh interval, scheduled times and all AI translation settings.",
+    cfg_p3:"AI translation is completely optional — the integration works without it, displaying the original Croatian content.",
+    cfg_interval:"Interval (seconds)", cfg_schedule:"Scheduled times", cfg_translation:"AI translation", cfg_lang:"Translation language",
+    cfg_note:"Note", cfg_note_body:"The integration is single-instance. It can only be added once to HA.",
+    author_label:"Author", tech_label:"Technologies", source_label:"Data source",
+
+    s04_label:"Sensors", s04_title:"Entities & Sensors", s04_sub:"Sensors created automatically for each horoscope type.",
+    raw_label:"Raw sensors — original HTML/text",
+    fmt_label:"Formatted sensors — cleaned text",
+    trans_label:"Translated sensors — AI translation",
+    status_label:"Status sensor",
+    status_body:"Tracks AI translation state — last attempt, last success, error message and language.",
+    data_model_label:"Data model",
+    data_model_body:"Payload sensors use state for a short timestamp, with full content in attributes.data. Source links are in attributes.source_urls.",
+
+    s05_label:"Services", s05_title:"HA Services",
+    svc1_title:"horoskop_hr.refresh", svc1_body:"Immediately triggers a data fetch without waiting for the next interval.",
+    svc2_title:"horoskop_hr.translate", svc2_body:"Triggers AI translation for current payloads. Optionally accepts an entry_id parameter.",
+
+    s06_label:"Features", s06_title:"Key features",
+    f1_title:"12 zodiac signs", f1_body:"Full support for all signs — Aries, Taurus, Gemini, Cancer, Leo, Virgo, Libra, Scorpio, Sagittarius, Capricorn, Aquarius, Pisces.",
+    f2_title:"3 horoscope types", f2_body:"Daily, weekly and monthly horoscope — each as a separate sensor.",
+    f3_title:"AI translation", f3_body:"Optional AI translation via HA ai_task entity to any language.",
+    f4_title:"Scheduled refresh", f4_body:"Refresh at exactly defined times of day, not just by interval.",
+    f5_title:"HACS update flow", f5_body:"Standard HACS flow — release tag and new version in manifest.json.",
+    f6_title:"No content caching", f6_body:"The integration does not cache or redistribute content — direct fetch from the source.",
+
+    s07_label:"Documentation", s07_title:"Resources & Support",
+    d1_title:"GitHub Repository", d2_title:"Report a bug", d3_title:"ehoroskop.net", d4_title:"Releases",
+    cta:"View on GitHub",
+    footer_sub:"Home Assistant Integration", footer_hacs:"HACS Custom Integration", footer_os:"Open Source",
+    footer_unofficial:"Unofficial project — not affiliated with ehoroskop.net",
+  }
+};
+</script>
+
+<!-- ═════ NAV ═════ -->
+<nav class="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 md:px-10 py-4
+  border-b border-purple-500/10
+  bg-[#0a0612]/80 backdrop-blur-md">
+  <div class="flex items-center gap-2.5">
+    <span class="text-xl">✨</span>
+    <span class="font-mono text-sm text-purple-300/60 tracking-widest uppercase">Horoskop HR</span>
+  </div>
+  <div class="flex items-center gap-3">
+    <div class="lang-toggle">
+      <button class="lang-btn" id="btnHr" onclick="setLang('hr')">HR</button>
+      <button class="lang-btn" id="btnEn" onclick="setLang('en')">EN</button>
+    </div>
+    <button class="theme-pill" id="themeToggle">
+      <div class="tptrack"><div class="tpthumb"></div></div>
+      <span class="tplabel" id="themeLabel"></span>
+    </button>
+    <a href="https://github.com/BrunoAFK/horoskop_hr" target="_blank"
+       class="hidden sm:flex items-center gap-2 px-4 py-2 rounded-full border border-purple-500/30 hover:border-purple-500/70 hover:bg-purple-500/5 transition-all text-sm font-mono text-purple-300">
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      <span data-t="nav_github">GitHub</span>
+    </a>
+  </div>
+</nav>
+
+<!-- ═════ HERO ═════ -->
+<section class="relative min-h-screen flex flex-col items-center justify-center overflow-hidden px-6 pt-20">
+
+  <!-- Starfield -->
+  <div class="starfield" aria-hidden="true" id="starfield"></div>
+
+  <!-- Nebula orbs -->
+  <div class="nebula w-[600px] h-[600px] bg-purple-600/20 top-[-10%] left-[-15%]"></div>
+  <div class="nebula w-[500px] h-[500px] bg-violet-800/15 bottom-[-10%] right-[-10%]" style="animation-delay:3s"></div>
+  <div class="nebula w-[300px] h-[300px] bg-fuchsia-600/10 top-[40%] left-[60%]" style="animation-delay:1.5s"></div>
+
+  <div class="relative z-10 text-center max-w-4xl mx-auto" style="animation:fadeUp .9s ease forwards;opacity:0">
+
+    <!-- Zodiac wheel icon cluster -->
+    <div class="flex justify-center mb-10">
+      <div class="relative">
+        <!-- Outer glow ring -->
+        <div class="absolute inset-0 rounded-full bg-purple-500/20 blur-xl scale-125 animate-pulse-slow"></div>
+        <!-- Main icon -->
+        <div class="relative w-28 h-28 rounded-full bg-gradient-to-br from-purple-900/80 to-violet-950/80 border border-purple-500/40 flex items-center justify-center zodiac-float ai-glow">
+          <span class="text-5xl">🔮</span>
+        </div>
+        <!-- Orbiting zodiac symbols -->
+        <div class="absolute -top-2 -right-2 w-8 h-8 rounded-full bg-purple-900/80 border border-purple-500/40 flex items-center justify-center text-sm">♈</div>
+        <div class="absolute -bottom-2 -left-2 w-8 h-8 rounded-full bg-purple-900/80 border border-purple-500/40 flex items-center justify-center text-sm">♓</div>
+        <div class="absolute top-1/2 -right-4 -translate-y-1/2 w-7 h-7 rounded-full bg-violet-900/80 border border-purple-500/30 flex items-center justify-center text-xs">♋</div>
+        <div class="absolute -top-1 -left-3 w-7 h-7 rounded-full bg-violet-900/80 border border-purple-500/30 flex items-center justify-center text-xs">♊</div>
+        <!-- HA badge -->
+        <div class="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-purple-500 flex items-center justify-center shadow-lg shadow-purple-500/40">
+          <span class="text-white text-[8px] font-bold tracking-tight">HA</span>
+        </div>
+      </div>
+    </div>
+
+    <h1 class="font-display font-900 tracking-tight leading-none mb-2" style="font-size:clamp(3rem,10vw,6rem)">
+      <span class="grad">Horoskop</span>
+      <span class="text-white">HR</span>
+    </h1>
+    <p class="font-mono text-sm text-purple-400/70 tracking-widest uppercase mb-6">for Home Assistant · ehoroskop.net</p>
+
+    <p class="text-xl md:text-2xl text-slate-400 font-light max-w-2xl mx-auto leading-relaxed" data-t="hero_sub"></p>
+
+    <!-- Zodiac signs strip -->
+    <div class="flex flex-wrap justify-center gap-2 mt-8 text-lg opacity-60">
+      <span title="Ovan/Aries">♈</span><span title="Bik/Taurus">♉</span><span title="Blizanci/Gemini">♊</span>
+      <span title="Rak/Cancer">♋</span><span title="Lav/Leo">♌</span><span title="Djevica/Virgo">♍</span>
+      <span title="Vaga/Libra">♎</span><span title="Škorpion/Scorpio">♏</span><span title="Strijelac/Sagittarius">♐</span>
+      <span title="Jarac/Capricorn">♑</span><span title="Vodenjak/Aquarius">♒</span><span title="Ribe/Pisces">♓</span>
+    </div>
+
+    <div class="flex flex-wrap items-center justify-center gap-3 mt-8">
+      <span class="flex items-center gap-2 px-5 py-2.5 rounded-full bg-purple-500/10 border border-purple-500/25 text-purple-300 text-sm font-mono">
+        <span class="w-2 h-2 rounded-full bg-purple-400 animate-pulse inline-block"></span>
+        <span data-t="badge_hacs"></span>
+      </span>
+      <span class="px-5 py-2.5 rounded-full bg-white/5 border border-white/10 text-slate-400 text-sm font-mono" data-t="badge_ha"></span>
+      <span class="px-5 py-2.5 rounded-full bg-fuchsia-500/10 border border-fuchsia-500/20 text-fuchsia-300 text-sm font-mono">✦ <span data-t="badge_ai"></span></span>
+      <span class="px-5 py-2.5 rounded-full bg-white/5 border border-white/10 text-slate-400 text-sm font-mono" data-t="badge_os"></span>
+    </div>
+
+    <div class="mt-14 flex flex-col items-center gap-2 text-slate-600">
+      <span class="text-xs font-mono tracking-widest uppercase" data-t="scroll"></span>
+      <div class="flex gap-1">
+        <span class="dot w-1.5 h-1.5 rounded-full bg-purple-500 inline-block"></span>
+        <span class="dot w-1.5 h-1.5 rounded-full bg-purple-500 inline-block"></span>
+        <span class="dot w-1.5 h-1.5 rounded-full bg-purple-500 inline-block"></span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═════ ABOUT ═════ -->
+<section class="py-28 px-6 relative bg-[#0d0920]">
+  <div class="max-w-5xl mx-auto">
+    <div class="reveal mb-12">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="sn text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md">01</span>
+        <span class="text-sm font-mono text-slate-500 uppercase tracking-widest" data-t="s01_label"></span>
+      </div>
+      <h2 class="font-display font-700 text-white" style="font-size:clamp(2rem,5vw,3.25rem);line-height:1.15" data-t="s01_title"></h2>
+    </div>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="reveal card p-8 bg-white/[0.03] border-white/5">
+        <div class="w-14 h-14 rounded-xl bg-purple-500/10 flex items-center justify-center mb-6 text-3xl">♈</div>
+        <h3 class="font-display text-2xl font-600 mb-3 text-white" data-t="c1_title"></h3>
+        <p class="text-slate-400 leading-relaxed" data-t="c1_body"></p>
+      </div>
+      <div class="reveal card p-8 bg-white/[0.03] border-white/5" style="transition-delay:.1s">
+        <div class="w-14 h-14 rounded-xl bg-purple-500/10 flex items-center justify-center mb-6 text-3xl">🤖</div>
+        <h3 class="font-display text-2xl font-600 mb-3 text-white" data-t="c2_title"></h3>
+        <p class="text-slate-400 leading-relaxed" data-t="c2_body"></p>
+      </div>
+      <div class="reveal card p-8 bg-white/[0.03] border-white/5" style="transition-delay:.15s">
+        <div class="w-14 h-14 rounded-xl bg-purple-500/10 flex items-center justify-center mb-6 text-3xl">📡</div>
+        <h3 class="font-display text-2xl font-600 mb-3 text-white" data-t="c3_title"></h3>
+        <p class="text-slate-400 leading-relaxed" data-t="c3_body"></p>
+      </div>
+      <div class="reveal card p-8 bg-white/[0.03] border-white/5" style="transition-delay:.2s">
+        <div class="w-14 h-14 rounded-xl bg-purple-500/10 flex items-center justify-center mb-6 text-3xl">⏰</div>
+        <h3 class="font-display text-2xl font-600 mb-3 text-white" data-t="c4_title"></h3>
+        <p class="text-slate-400 leading-relaxed" data-t="c4_body"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═════ INSTALLATION ═════ -->
+<section class="py-28 px-6 bg-[#0a0612]">
+  <div class="max-w-5xl mx-auto">
+    <div class="reveal mb-14">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="sn text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md">02</span>
+        <span class="text-sm font-mono text-slate-500 uppercase tracking-widest" data-t="s02_label"></span>
+      </div>
+      <h2 class="font-display font-700 text-white mb-3" style="font-size:clamp(2rem,5vw,3.25rem);line-height:1.15" data-t="s02_title"></h2>
+      <p class="text-lg text-slate-500 max-w-xl" data-t="s02_sub"></p>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-10 items-start">
+      <!-- Steps -->
+      <div class="w-full lg:w-[58%] reveal">
+        <div class="relative">
+          <div class="tl-line"></div>
+
+          <div class="relative flex gap-5 pb-9">
+            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-purple-500 flex items-center justify-center text-white font-mono text-base z-10 shadow-lg shadow-purple-500/30">1</div>
+            <div class="pt-1 min-w-0">
+              <h4 class="font-display text-xl font-600 text-white mb-1.5" data-t="step1_title"></h4>
+              <p class="text-base text-slate-400"><span data-t="step1_body"></span> <code class="font-mono text-sm text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md whitespace-nowrap">HACS → Integrations</code></p>
+            </div>
+          </div>
+          <div class="relative flex gap-5 pb-9">
+            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 font-mono text-base z-10">2</div>
+            <div class="pt-1 min-w-0">
+              <h4 class="font-display text-xl font-600 text-white mb-1.5" data-t="step2_title"></h4>
+              <p class="text-base text-slate-400"><span data-t="step2_body"></span> <code class="font-mono text-sm text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md whitespace-nowrap">⋮ → Custom repositories</code></p>
+            </div>
+          </div>
+          <div class="relative flex gap-5 pb-9">
+            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 font-mono text-base z-10">3</div>
+            <div class="pt-1 min-w-0 w-full">
+              <h4 class="font-display text-xl font-600 text-white mb-1.5" data-t="step3_title"></h4>
+              <p class="text-base text-slate-400 mb-3"><span data-t="step3_body"></span> <code class="font-mono text-sm text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md">Integration</code></p>
+              <div class="cb px-4 py-3 flex items-center gap-3">
+                <code class="font-mono text-sm text-purple-300 break-all flex-1">https://github.com/BrunoAFK/horoskop_hr</code>
+                <button onclick="copyUrl(this,'https://github.com/BrunoAFK/horoskop_hr')" class="flex-shrink-0 text-slate-500 hover:text-purple-400 transition-colors p-1">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="relative flex gap-5 pb-9">
+            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 font-mono text-base z-10">4</div>
+            <div class="pt-1 min-w-0">
+              <h4 class="font-display text-xl font-600 text-white mb-1.5" data-t="step4_title"></h4>
+              <p class="text-base text-slate-400"><span data-t="step4_body"></span> <strong class="text-slate-200 font-600">Horoskop HR</strong> <span data-t="step4_body2"></span></p>
+            </div>
+          </div>
+          <div class="relative flex gap-5">
+            <div class="flex-shrink-0 w-10 h-10 rounded-full bg-purple-500/20 border border-purple-500/40 flex items-center justify-center text-purple-300 font-mono text-base z-10">5</div>
+            <div class="pt-1 min-w-0">
+              <h4 class="font-display text-xl font-600 text-white mb-1.5" data-t="step5_title"></h4>
+              <p class="text-base text-slate-400"><span data-t="step5_body"></span> <code class="font-mono text-sm text-purple-300 bg-purple-500/10 px-2 py-0.5 rounded-md">Settings → Devices &amp; Services → Add Integration</code> <span data-t="step5_body2"></span></p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manual + Domain -->
+      <div class="w-full lg:w-[40%] space-y-5 reveal" style="transition-delay:.15s">
+        <div class="rounded-2xl border border-white/8 p-7 bg-white/[0.03]">
+          <div class="flex items-center gap-2.5 mb-5">
+            <svg class="w-4 h-4 text-slate-500 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><circle cx="12" cy="12" r="3"/></svg>
+            <span class="text-sm font-mono text-slate-500 uppercase tracking-wider" data-t="manual_label"></span>
+          </div>
+          <ol class="space-y-3">
+            <li class="flex gap-3 text-base text-slate-400">
+              <span class="text-purple-400 font-mono font-500 flex-shrink-0">1.</span>
+              <span><span data-t="manual_1"></span> <code class="font-mono text-sm text-purple-300 bg-purple-500/10 px-1.5 py-0.5 rounded-md break-all">custom_components/horoskop_hr</code> <span data-t="manual_1b"></span></span>
+            </li>
+            <li class="flex gap-3 text-base text-slate-400"><span class="text-purple-400 font-mono font-500 flex-shrink-0">2.</span><span data-t="manual_2"></span></li>
+            <li class="flex gap-3 text-base text-slate-400"><span class="text-purple-400 font-mono font-500 flex-shrink-0">3.</span><span data-t="manual_3"></span></li>
+          </ol>
+          <div class="mt-6 pt-5 border-t border-white/5">
+            <p class="text-xs font-mono text-slate-500 mb-2 uppercase tracking-wider" data-t="target_path"></p>
+            <div class="cb px-4 py-3"><code class="font-mono text-sm text-purple-300 break-all">&lt;HA_CONFIG&gt;/custom_components/horoskop_hr</code></div>
+          </div>
+        </div>
+        <div class="rounded-xl border border-purple-500/20 bg-purple-500/[0.06] p-6">
+          <p class="text-xs font-mono text-purple-400 uppercase tracking-wider mb-2.5" data-t="domain_label"></p>
+          <p class="font-mono text-xl font-500 text-purple-200">horoskop_hr</p>
+          <p class="text-sm font-mono text-purple-400/60 mt-2"><span data-t="entity_prefix"></span>: <span class="text-purple-300">single-instance</span></p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═════ CONFIG ═════ -->
+<section class="py-28 px-6 bg-[#0d0920]">
+  <div class="max-w-5xl mx-auto">
+    <div class="reveal mb-12">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="sn text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md">03</span>
+        <span class="text-sm font-mono text-slate-500 uppercase tracking-widest" data-t="s03_label"></span>
+      </div>
+      <h2 class="font-display font-700 text-white" style="font-size:clamp(2rem,5vw,3.25rem);line-height:1.15" data-t="s03_title"></h2>
+    </div>
+
+    <!-- Description -->
+    <div class="reveal mb-6">
+      <div class="rounded-2xl p-8 bg-white/[0.03] border border-white/5 space-y-5">
+        <p class="text-lg text-slate-400 leading-relaxed" data-t="cfg_p1"></p>
+        <p class="text-lg text-slate-400 leading-relaxed" data-t="cfg_p2"></p>
+        <p class="text-lg text-slate-400 leading-relaxed" data-t="cfg_p3"></p>
+      </div>
+    </div>
+
+    <!-- Config options box -->
+    <div class="reveal mb-8">
+      <div class="rounded-2xl border border-purple-500/20 bg-purple-500/[0.04] p-7">
+        <p class="text-sm font-mono text-purple-400 uppercase tracking-wider mb-6">Configure options</p>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-6">
+          <div>
+            <p class="text-xs text-slate-500 font-mono mb-2 uppercase tracking-wide" data-t="cfg_interval"></p>
+            <code class="font-mono text-base text-purple-300">300 – 86400</code>
+          </div>
+          <div>
+            <p class="text-xs text-slate-500 font-mono mb-2 uppercase tracking-wide" data-t="cfg_schedule"></p>
+            <code class="font-mono text-base text-purple-300">00:00, 08:00…</code>
+          </div>
+          <div>
+            <p class="text-xs text-slate-500 font-mono mb-2 uppercase tracking-wide" data-t="cfg_translation"></p>
+            <code class="font-mono text-base text-purple-300">true / false</code>
+          </div>
+          <div>
+            <p class="text-xs text-slate-500 font-mono mb-2 uppercase tracking-wide" data-t="cfg_lang"></p>
+            <code class="font-mono text-base text-purple-300">hr, en, de…</code>
+          </div>
+        </div>
+        <div class="mt-6 pt-5 border-t border-purple-500/15 flex gap-3 items-start">
+          <span class="text-base flex-shrink-0 mt-0.5">ℹ️</span>
+          <p class="text-sm text-slate-400 leading-relaxed"><strong class="text-slate-200 font-600" data-t="cfg_note"></strong>: <span data-t="cfg_note_body"></span></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Info strip -->
+    <div class="reveal">
+      <div class="rounded-2xl bg-white/[0.03] border border-white/5 overflow-hidden">
+        <div class="flex flex-col sm:flex-row divide-y sm:divide-y-0 sm:divide-x divide-white/5">
+          <div class="flex-1 p-5">
+            <p class="text-xs font-mono text-slate-500 uppercase tracking-wider mb-3" data-t="author_label"></p>
+            <div class="flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-full bg-purple-500/15 flex items-center justify-center text-purple-300 font-display font-700 text-base flex-shrink-0">B</div>
+              <div><p class="font-display font-600 text-sm text-white">BrunoAFK</p><a href="https://github.com/BrunoAFK" target="_blank" class="text-xs font-mono text-purple-400 hover:text-purple-300 transition-colors">@BrunoAFK</a></div>
+            </div>
+          </div>
+          <div class="flex-1 p-5">
+            <p class="text-xs font-mono text-slate-500 uppercase tracking-wider mb-3" data-t="tech_label"></p>
+            <div class="flex flex-wrap gap-1.5">
+              <span class="px-2 py-1 rounded-md bg-white/5 text-xs font-mono text-slate-400">Python</span>
+              <span class="px-2 py-1 rounded-md bg-white/5 text-xs font-mono text-slate-400">HTML scraping</span>
+              <span class="px-2 py-1 rounded-md bg-white/5 text-xs font-mono text-slate-400">Home Assistant</span>
+              <span class="px-2 py-1 rounded-md bg-white/5 text-xs font-mono text-slate-400">HACS</span>
+              <span class="px-2 py-1 rounded-md bg-fuchsia-500/10 text-xs font-mono text-fuchsia-300">AI / ai_task</span>
+            </div>
+          </div>
+          <div class="flex-1 p-5">
+            <p class="text-xs font-mono text-slate-500 uppercase tracking-wider mb-3" data-t="source_label"></p>
+            <div class="flex items-center gap-2.5">
+              <span class="text-xl flex-shrink-0">🔮</span>
+              <div>
+                <p class="font-display font-600 text-sm text-white">ehoroskop.net</p>
+                <a href="https://ehoroskop.net" target="_blank" class="text-xs font-mono text-purple-400 hover:underline">ehoroskop.net →</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═════ SENSORS ═════ -->
+<section class="py-28 px-6 bg-[#0a0612]">
+  <div class="max-w-5xl mx-auto">
+    <div class="reveal mb-14">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="sn text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md">04</span>
+        <span class="text-sm font-mono text-slate-500 uppercase tracking-widest" data-t="s04_label"></span>
+      </div>
+      <h2 class="font-display font-700 text-white mb-3" style="font-size:clamp(2rem,5vw,3.25rem);line-height:1.15" data-t="s04_title"></h2>
+      <p class="text-lg text-slate-500 max-w-xl" data-t="s04_sub"></p>
+    </div>
+
+    <!-- Raw -->
+    <div class="reveal mb-6">
+      <p class="text-xs font-mono text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-slate-500 inline-block"></span>
+        <span data-t="raw_label"></span>
+      </p>
+      <div class="grid sm:grid-cols-3 gap-3">
+        <div class="sensor-badge cb p-4"><div class="font-mono text-xs text-slate-500 mb-1">sensor</div><div class="font-mono text-sm text-purple-300">horoskop_dnevni_raw</div></div>
+        <div class="sensor-badge cb p-4"><div class="font-mono text-xs text-slate-500 mb-1">sensor</div><div class="font-mono text-sm text-purple-300">horoskop_tjedni_raw</div></div>
+        <div class="sensor-badge cb p-4"><div class="font-mono text-xs text-slate-500 mb-1">sensor</div><div class="font-mono text-sm text-purple-300">horoskop_mjesecni_raw</div></div>
+      </div>
+    </div>
+
+    <!-- Formatted -->
+    <div class="reveal mb-6">
+      <p class="text-xs font-mono text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-purple-500 inline-block"></span>
+        <span data-t="fmt_label"></span>
+      </p>
+      <div class="grid sm:grid-cols-3 gap-3">
+        <div class="sensor-badge cb p-4"><div class="font-mono text-xs text-slate-500 mb-1">sensor</div><div class="font-mono text-sm text-purple-300">horoskop_dnevni_formatted</div></div>
+        <div class="sensor-badge cb p-4"><div class="font-mono text-xs text-slate-500 mb-1">sensor</div><div class="font-mono text-sm text-purple-300">horoskop_tjedni_formatted</div></div>
+        <div class="sensor-badge cb p-4"><div class="font-mono text-xs text-slate-500 mb-1">sensor</div><div class="font-mono text-sm text-purple-300">horoskop_mjesecni_formatted</div></div>
+      </div>
+    </div>
+
+    <!-- Translated -->
+    <div class="reveal mb-6">
+      <p class="text-xs font-mono text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-fuchsia-400 inline-block"></span>
+        <span data-t="trans_label"></span>
+      </p>
+      <div class="grid sm:grid-cols-3 gap-3">
+        <div class="sensor-badge cb p-4 border-fuchsia-500/20"><div class="font-mono text-xs text-slate-500 mb-1">sensor</div><div class="font-mono text-sm text-fuchsia-300">horoskop_dnevni_translated</div></div>
+        <div class="sensor-badge cb p-4 border-fuchsia-500/20"><div class="font-mono text-xs text-slate-500 mb-1">sensor</div><div class="font-mono text-sm text-fuchsia-300">horoskop_tjedni_translated</div></div>
+        <div class="sensor-badge cb p-4 border-fuchsia-500/20"><div class="font-mono text-xs text-slate-500 mb-1">sensor</div><div class="font-mono text-sm text-fuchsia-300">horoskop_mjesecni_translated</div></div>
+      </div>
+    </div>
+
+    <!-- Status + data model -->
+    <div class="grid md:grid-cols-2 gap-5 reveal">
+      <div class="rounded-2xl border border-purple-500/20 bg-purple-500/[0.04] p-6">
+        <p class="text-xs font-mono text-purple-400 uppercase tracking-wider mb-3" data-t="status_label"></p>
+        <div class="font-mono text-sm text-purple-300 mb-3">sensor.horoskop_translation_status</div>
+        <p class="text-sm text-slate-400 leading-relaxed" data-t="status_body"></p>
+      </div>
+      <div class="rounded-2xl border border-white/8 bg-white/[0.02] p-6">
+        <p class="text-xs font-mono text-slate-500 uppercase tracking-wider mb-3" data-t="data_model_label"></p>
+        <div class="space-y-1.5 mb-3">
+          <div class="cb px-3 py-1.5"><code class="font-mono text-xs text-purple-300">state → timestamp</code></div>
+          <div class="cb px-3 py-1.5"><code class="font-mono text-xs text-purple-300">attributes.data → full payload</code></div>
+          <div class="cb px-3 py-1.5"><code class="font-mono text-xs text-purple-300">attributes.source_urls → links</code></div>
+        </div>
+        <p class="text-sm text-slate-400 leading-relaxed" data-t="data_model_body"></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═════ SERVICES ═════ -->
+<section class="py-28 px-6 bg-[#0d0920]">
+  <div class="max-w-5xl mx-auto">
+    <div class="reveal mb-12">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="sn text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md">05</span>
+        <span class="text-sm font-mono text-slate-500 uppercase tracking-widest" data-t="s05_label"></span>
+      </div>
+      <h2 class="font-display font-700 text-white" style="font-size:clamp(2rem,5vw,3.25rem);line-height:1.15" data-t="s05_title"></h2>
+    </div>
+    <div class="grid md:grid-cols-2 gap-6 reveal">
+      <div class="card p-7 bg-white/[0.03] border-white/5">
+        <div class="text-2xl mb-4">🔄</div>
+        <h4 class="font-display text-xl font-600 text-white mb-2" data-t="svc1_title"></h4>
+        <p class="text-base text-slate-400 leading-relaxed" data-t="svc1_body"></p>
+        <div class="mt-4 cb px-4 py-2.5">
+          <code class="font-mono text-sm text-purple-300">horoskop_hr.refresh</code>
+          <span class="font-mono text-xs text-slate-500 ml-3">entry_id? (optional)</span>
+        </div>
+      </div>
+      <div class="card p-7 bg-white/[0.03] border-white/5">
+        <div class="text-2xl mb-4">🤖</div>
+        <h4 class="font-display text-xl font-600 text-white mb-2" data-t="svc2_title"></h4>
+        <p class="text-base text-slate-400 leading-relaxed" data-t="svc2_body"></p>
+        <div class="mt-4 cb px-4 py-2.5">
+          <code class="font-mono text-sm text-fuchsia-300">horoskop_hr.translate</code>
+          <span class="font-mono text-xs text-slate-500 ml-3">entry_id? (optional)</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═════ FEATURES ═════ -->
+<section class="py-28 px-6 bg-[#0a0612]">
+  <div class="max-w-5xl mx-auto">
+    <div class="reveal mb-12">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="sn text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md">06</span>
+        <span class="text-sm font-mono text-slate-500 uppercase tracking-widest" data-t="s06_label"></span>
+      </div>
+      <h2 class="font-display font-700 text-white" style="font-size:clamp(2rem,5vw,3.25rem);line-height:1.15" data-t="s06_title"></h2>
+    </div>
+    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 reveal">
+      <div class="card p-6 bg-white/[0.03] border-white/5"><div class="text-2xl mb-4">♊</div><h4 class="font-display text-lg font-600 text-white mb-2" data-t="f1_title"></h4><p class="text-base text-slate-400 leading-relaxed" data-t="f1_body"></p></div>
+      <div class="card p-6 bg-white/[0.03] border-white/5"><div class="text-2xl mb-4">📅</div><h4 class="font-display text-lg font-600 text-white mb-2" data-t="f2_title"></h4><p class="text-base text-slate-400 leading-relaxed" data-t="f2_body"></p></div>
+      <div class="card p-6 bg-white/[0.03] border-white/5"><div class="text-2xl mb-4">✨</div><h4 class="font-display text-lg font-600 text-white mb-2" data-t="f3_title"></h4><p class="text-base text-slate-400 leading-relaxed" data-t="f3_body"></p></div>
+      <div class="card p-6 bg-white/[0.03] border-white/5"><div class="text-2xl mb-4">🕐</div><h4 class="font-display text-lg font-600 text-white mb-2" data-t="f4_title"></h4><p class="text-base text-slate-400 leading-relaxed" data-t="f4_body"></p></div>
+      <div class="card p-6 bg-white/[0.03] border-white/5"><div class="text-2xl mb-4">📦</div><h4 class="font-display text-lg font-600 text-white mb-2" data-t="f5_title"></h4><p class="text-base text-slate-400 leading-relaxed" data-t="f5_body"></p></div>
+      <div class="card p-6 bg-white/[0.03] border-white/5"><div class="text-2xl mb-4">🔒</div><h4 class="font-display text-lg font-600 text-white mb-2" data-t="f6_title"></h4><p class="text-base text-slate-400 leading-relaxed" data-t="f6_body"></p></div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ═════ DOCS + CTA ═════ -->
+<section class="py-28 px-6 bg-[#0d0920]">
+  <div class="max-w-5xl mx-auto">
+    <div class="reveal mb-12">
+      <div class="flex items-center gap-3 mb-4">
+        <span class="sn text-purple-400 bg-purple-500/10 px-2.5 py-1 rounded-md">07</span>
+        <span class="text-sm font-mono text-slate-500 uppercase tracking-widest" data-t="s07_label"></span>
+      </div>
+      <h2 class="font-display font-700 text-white" style="font-size:clamp(2rem,5vw,3.25rem);line-height:1.15" data-t="s07_title"></h2>
+    </div>
+
+    <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 reveal">
+      <a href="https://github.com/BrunoAFK/horoskop_hr" target="_blank" class="card block p-6 bg-white/[0.03] border-white/5 group">
+        <div class="text-2xl mb-4">📁</div>
+        <h4 class="font-display font-600 text-base text-white mb-2 group-hover:text-purple-300 transition-colors" data-t="d1_title"></h4>
+        <p class="text-sm text-slate-500 font-mono">BrunoAFK/horoskop_hr</p>
+      </a>
+      <a href="https://github.com/BrunoAFK/horoskop_hr/issues" target="_blank" class="card block p-6 bg-white/[0.03] border-white/5 group">
+        <div class="text-2xl mb-4">🐛</div>
+        <h4 class="font-display font-600 text-base text-white mb-2 group-hover:text-purple-300 transition-colors" data-t="d2_title"></h4>
+        <p class="text-sm text-slate-500 font-mono">GitHub Issues</p>
+      </a>
+      <a href="https://ehoroskop.net" target="_blank" class="card block p-6 bg-white/[0.03] border-white/5 group">
+        <div class="text-2xl mb-4">🔮</div>
+        <h4 class="font-display font-600 text-base text-white mb-2 group-hover:text-purple-300 transition-colors" data-t="d3_title"></h4>
+        <p class="text-sm text-slate-500 font-mono">ehoroskop.net</p>
+      </a>
+      <a href="https://github.com/BrunoAFK/horoskop_hr/releases" target="_blank" class="card block p-6 bg-white/[0.03] border-white/5 group">
+        <div class="text-2xl mb-4">🏷️</div>
+        <h4 class="font-display font-600 text-base text-white mb-2 group-hover:text-purple-300 transition-colors" data-t="d4_title"></h4>
+        <p class="text-sm text-slate-500 font-mono">Latest release</p>
+      </a>
+    </div>
+
+    <div class="reveal mt-16 text-center">
+      <div class="inline-block relative">
+        <div class="absolute inset-0 bg-purple-500/20 blur-2xl rounded-full scale-150 pointer-events-none"></div>
+        <a href="https://github.com/BrunoAFK/horoskop_hr" target="_blank"
+           class="relative inline-flex items-center gap-3 px-9 py-5 bg-gradient-to-r from-purple-600 to-violet-600 hover:from-purple-500 hover:to-violet-500 text-white font-display font-600 text-lg rounded-2xl transition-all hover:scale-[1.02] shadow-lg shadow-purple-500/25">
+          <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span data-t="cta"></span>
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer class="py-10 px-6 border-t border-purple-500/10">
+  <div class="max-w-5xl mx-auto">
+    <div class="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl zodiac-float">🔮</span>
+        <div>
+          <p class="font-display font-600 text-base text-slate-300">Horoskop HR</p>
+          <p class="text-sm font-mono text-slate-500" data-t="footer_sub"></p>
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center justify-center gap-4 text-sm font-mono text-slate-500">
+        <span data-t="footer_hacs"></span>
+        <span>•</span>
+        <span data-t="footer_os"></span>
+        <span>•</span>
+        <a href="https://github.com/BrunoAFK/horoskop_hr" target="_blank" class="hover:text-purple-400 transition-colors">BrunoAFK/horoskop_hr</a>
+      </div>
+    </div>
+    <p class="text-center text-xs font-mono text-slate-600" data-t="footer_unofficial"></p>
+  </div>
+</footer>
+
+<!-- ═════ SCRIPTS ═════ -->
+<script>
+// Generate starfield
+(function(){
+  var sf=document.getElementById('starfield');
+  for(var i=0;i<120;i++){
+    var s=document.createElement('div');
+    s.className='star';
+    var size=Math.random()*2.5+0.5;
+    s.style.cssText=[
+      'width:'+size+'px',
+      'height:'+size+'px',
+      'left:'+(Math.random()*100)+'%',
+      'top:'+(Math.random()*100)+'%',
+      '--dur:'+(Math.random()*4+2)+'s',
+      '--delay:-'+(Math.random()*4)+'s',
+      '--min-op:'+(Math.random()*0.1+0.05),
+      '--max-op:'+(Math.random()*0.5+0.3),
+    ].join(';');
+    sf.appendChild(s);
+  }
+})();
+
+// Cookie helpers
+function getCookie(n){var m=document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]*)'));return m?m[1]:null;}
+function setCookie(n,v,d){var x=new Date();x.setTime(x.getTime()+d*864e5);document.cookie=n+'='+v+';expires='+x.toUTCString()+';path=/';}
+
+// Theme
+var themeLabel=document.getElementById('themeLabel');
+function updateThemeLabel(){
+  var lang=window.__lang||'hr';
+  themeLabel.textContent=document.documentElement.classList.contains('dark')?T[lang].theme_dark:T[lang].theme_light;
+}
+document.getElementById('themeToggle').addEventListener('click',function(){
+  var isDark=document.documentElement.classList.toggle('dark');
+  setCookie('theme',isDark?'dark':'light',365);
+  updateThemeLabel();
+});
+
+// Language
+var btnHr=document.getElementById('btnHr');
+var btnEn=document.getElementById('btnEn');
+function applyLang(lang,save){
+  window.__lang=lang;
+  document.documentElement.setAttribute('data-lang',lang);
+  document.documentElement.lang=lang;
+  if(save)setCookie('lang',lang,365);
+  btnHr.classList.toggle('active',lang==='hr');
+  btnEn.classList.toggle('active',lang==='en');
+  document.body.classList.add('lang-switching');
+  setTimeout(function(){
+    document.querySelectorAll('[data-t]').forEach(function(el){
+      var k=el.getAttribute('data-t');
+      if(T[lang][k]!==undefined)el.textContent=T[lang][k];
+    });
+    updateThemeLabel();
+    document.body.classList.remove('lang-switching');
+  },150);
+}
+function setLang(lang){applyLang(lang,true);}
+applyLang(window.__lang||'hr',false);
+
+// Scroll reveal
+var observer=new IntersectionObserver(function(entries){
+  entries.forEach(function(e){
+    if(e.isIntersecting){setTimeout(function(){e.target.classList.add('visible');},60);observer.unobserve(e.target);}
+  });
+},{threshold:.08,rootMargin:'0px 0px -40px 0px'});
+document.querySelectorAll('.reveal').forEach(function(el){observer.observe(el);});
+
+// Copy
+function copyUrl(btn,url){
+  navigator.clipboard.writeText(url).then(function(){
+    var orig=btn.innerHTML;
+    btn.innerHTML='<svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>';
+    setTimeout(function(){btn.innerHTML=orig;},1800);
+  });
+}
+</script>
+
+</body>
+</html>
